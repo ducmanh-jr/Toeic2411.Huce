@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MA TOEIC Practice — Test 3, 4, 5</title>
+  <link rel="stylesheet" href="css/style.css?v=5" />
+</head>
+<body>
+  <div id="app">
+    <!-- DASHBOARD VIEW -->
+    <div id="view-dashboard" class="view active">
+      <header class="dash-header">
+        <div class="container dash-header-inner">
+          <div class="brand">
+            <span class="brand-badge">MA</span>
+            <div>
+              <h1>TOEIC Practice Studio</h1>
+              <p class="subtitle">Luyện thi TOEIC Listening &amp; Reading — Test 3, Test 4, Test 5</p>
+            </div>
+          </div>
+          <div class="dash-actions">
+            <button id="btn-open-vocab" class="btn btn-outline">600 Từ vựng</button>
+            <button id="btn-open-grammar" class="btn btn-outline">Ngữ pháp</button>
+            <button id="btn-open-mistakes" class="btn btn-outline">
+              Sổ tay câu sai (<span id="mistake-count-badge">0</span>)
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="container dash-main">
+        <section id="resume-banner" class="resume-banner hidden">
+          <div>
+            <strong>Bạn có bài thi đang làm dở:</strong>
+            <span id="resume-info"></span>
+          </div>
+          <div class="resume-actions">
+            <button id="btn-resume-draft" class="btn btn-primary btn-sm">Tiếp tục làm</button>
+            <button id="btn-discard-draft" class="btn btn-outline btn-sm">Hủy nháp</button>
+          </div>
+        </section>
+
+        <section class="test-grid" id="test-cards-container">
+          <!-- Rendered by app.js -->
+        </section>
+      </main>
+    </div>
+
+    <!-- VOCAB FLASHCARD VIEW -->
+    <div id="view-vocab" class="view">
+      <header class="exam-header">
+        <div class="exam-header-left">
+          <button id="btn-vocab-back" class="btn btn-outline btn-sm">&larr; Trang chủ</button>
+          <strong>600 Từ vựng TOEIC thiết yếu</strong>
+          <span id="vocab-progress-badge" class="badge">Đã thuộc: 0/619</span>
+        </div>
+        <div class="exam-header-right">
+          <select id="vocab-topic-filter" class="select-sm">
+            <option value="all">Tất cả chủ đề</option>
+          </select>
+          <select id="vocab-status-filter" class="select-sm">
+            <option value="all">Tất cả từ</option>
+            <option value="unlearned">Chưa thuộc</option>
+            <option value="learned">Đã thuộc</option>
+          </select>
+        </div>
+      </header>
+      <main class="container vocab-main">
+        <div class="flashcard-wrap">
+          <div id="flashcard" class="flashcard" title="Bấm để lật thẻ">
+            <div class="flashcard-face flashcard-front">
+              <div class="fc-topic" id="fc-topic">Topic</div>
+              <div class="fc-word" id="fc-word">basis</div>
+              <div class="fc-meta"><span id="fc-pos">n.</span> · <span id="fc-ipa">/'beisis/</span></div>
+              <div class="fc-hint">Bấm vào thẻ để xem nghĩa &amp; ví dụ</div>
+            </div>
+            <div class="flashcard-face flashcard-back hidden">
+              <div class="fc-meaning-vi" id="fc-meaning-vi">Nền tảng, cơ sở</div>
+              <div class="fc-meaning-en" id="fc-meaning-en"></div>
+              <div class="fc-example">
+                <div id="fc-example-en" class="fc-ex-en"></div>
+                <div id="fc-example-vi" class="fc-ex-vi"></div>
+              </div>
+            </div>
+          </div>
+          <div class="fc-controls">
+            <button id="btn-fc-prev" class="btn btn-outline">&lsaquo; Từ trước</button>
+            <button id="btn-fc-speak" class="btn btn-outline">🔊 Phát âm</button>
+            <button id="btn-fc-learned" class="btn btn-outline">✓ Đánh dấu đã thuộc</button>
+            <button id="btn-fc-next" class="btn btn-primary">Từ tiếp &rsaquo;</button>
+          </div>
+          <div class="fc-counter" id="fc-counter">1 / 619</div>
+        </div>
+      </main>
+    </div>
+
+    <!-- GRAMMAR BANK VIEW -->
+    <div id="view-grammar" class="view">
+      <header class="exam-header">
+        <div class="exam-header-left">
+          <button id="btn-grammar-back" class="btn btn-outline btn-sm">&larr; Trang chủ</button>
+          <strong>Ngân hàng Ngữ pháp TOEIC (Part 5–6)</strong>
+        </div>
+      </header>
+      <main class="container grammar-main">
+        <div class="grammar-layout">
+          <aside id="grammar-sidebar" class="grammar-sidebar"></aside>
+          <section id="grammar-content" class="grammar-content"></section>
+        </div>
+      </main>
+    </div>
+
+    <!-- MISTAKE NOTEBOOK VIEW -->
+    <div id="view-mistakes" class="view">
+      <header class="exam-header">
+        <div class="exam-header-left">
+          <button id="btn-mistakes-back" class="btn btn-outline btn-sm">&larr; Trang chủ</button>
+          <strong>Sổ tay câu sai &amp; Ghi chú</strong>
+        </div>
+        <div class="exam-header-right">
+          <select id="mistake-filter-test" class="select-sm">
+            <option value="all">Tất cả đề</option>
+            <option value="3">Test 3</option>
+            <option value="4">Test 4</option>
+            <option value="5">Test 5</option>
+          </select>
+        </div>
+      </header>
+      <main class="container mistakes-main">
+        <div id="mistakes-list" class="mistakes-list"></div>
+      </main>
+    </div>
+
+    <!-- EXAM / PRACTICE / REVIEW VIEW -->
+    <div id="view-exam" class="view">
+      <header class="exam-header">
+        <div class="exam-header-left">
+          <button id="btn-exit-exam" class="btn btn-outline btn-sm">&larr; Thoát</button>
+          <span id="exam-title" class="exam-title">Test 3</span>
+          <span id="exam-mode-badge" class="badge">Thi thử</span>
+        </div>
+
+        <div class="exam-header-center">
+          <div id="exam-timer" class="timer-box">120:00</div>
+          <div class="progress-box"><span class="progress-label">Đã làm: </span><strong id="exam-progress">0/200</strong></div>
+        </div>
+
+        <div class="exam-header-right">
+          <label class="instant-key-toggle" title="Hiện đáp án &amp; giải thích ngay bên dưới mỗi câu khi chọn">
+            <input id="toggle-instant-key" type="checkbox" /> Hiện đáp án &amp; Giải thích
+          </label>
+          <button id="btn-toggle-transcript" class="btn btn-outline btn-sm hidden">Xem Transcript</button>
+          <button id="btn-submit-exam" class="btn btn-primary btn-sm">Nộp bài</button>
+          <button id="btn-show-summary" class="btn btn-primary btn-sm hidden">Bảng điểm</button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <!-- LEFT: EXAM PAPER + AUDIO + TRANSCRIPT -->
+        <section class="pane-left">
+          <!-- Page & Zoom Toolbar -->
+          <div class="viewer-toolbar">
+            <div class="toolbar-group">
+              <button id="btn-prev-page" class="btn btn-outline btn-xs">&lsaquo; Trước</button>
+              <button id="btn-next-page" class="btn btn-outline btn-xs">Sau &rsaquo;</button>
+            </div>
+            <div class="toolbar-group">
+              <select id="select-part-jump" class="select-xs" title="Nhảy tới Part">
+                <option value="1">Part 1 (1–6)</option>
+                <option value="2">Part 2 (7–31)</option>
+                <option value="3">Part 3 (32–70)</option>
+                <option value="4">Part 4 (71–100)</option>
+                <option value="5">Part 5 (101–130)</option>
+                <option value="6">Part 6 (131–146)</option>
+                <option value="7">Part 7 (147–200)</option>
+              </select>
+              <select id="select-zoom" class="select-xs" title="Thu phóng trang đề">
+                <option value="fit">Vừa khung</option>
+                <option value="0.85">85%</option>
+                <option value="1">100%</option>
+                <option value="1.25">125%</option>
+                <option value="1.5">150%</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Audio Player Bar -->
+          <div id="audio-bar" class="audio-bar">
+            <button id="btn-audio-play" class="btn btn-primary btn-xs">▶ Phát</button>
+            <button id="btn-audio-rew" class="btn btn-outline btn-xs">-5s</button>
+            <button id="btn-audio-fwd" class="btn btn-outline btn-xs">+5s</button>
+            <span id="audio-track-label" class="audio-label">Q1</span>
+            <input id="audio-seek" type="range" min="0" max="100" value="0" class="audio-seek" />
+            <span id="audio-time" class="audio-time">00:00 / 00:00</span>
+            <select id="audio-speed" class="select-xs" title="Tốc độ phát">
+              <option value="0.85">0.85x</option>
+              <option value="1" selected>1.0x</option>
+              <option value="1.15">1.15x</option>
+              <option value="1.25">1.25x</option>
+            </select>
+            <label class="auto-next-label" title="Lặp lại đoạn audio hiện tại">
+              <input id="audio-loop" type="checkbox" /> Loop
+            </label>
+            <label class="auto-next-label" title="Tự động chuyển sang câu tiếp theo">
+              <input id="audio-auto-next" type="checkbox" checked /> Auto
+            </label>
+            <button id="btn-toggle-dictation" class="btn btn-outline btn-xs" title="Mở khung chép chính tả">Chép chính tả</button>
+          </div>
+
+          <!-- Dictation Practice Box -->
+          <div id="dictation-box" class="dictation-box hidden">
+            <div class="dictation-head">
+              <strong>Nghe chép chính tả (Dictation)</strong>
+              <span class="muted-text">Nghe và gõ lại câu bạn nghe được, sau đó bấm Xem Transcript để đối chiếu.</span>
+            </div>
+            <textarea id="dictation-input" rows="2" placeholder="Gõ lại nội dung tiếng Anh bạn nghe được..."></textarea>
+          </div>
+
+          <!-- Exam Page Canvas OR Transcript Drawer -->
+          <div class="viewer-body">
+            <div id="page-scroll" class="page-scroll">
+              <img id="page-image" class="page-image fit" alt="Trang đề TOEIC" />
+            </div>
+
+            <div id="transcript-panel" class="transcript-panel hidden">
+              <div class="transcript-toolbar">
+                <div>
+                  <strong>Transcript &amp; Giải thích Listening</strong>
+                </div>
+                <div class="toolbar-group">
+                  <button id="btn-tr-prev" class="btn btn-outline btn-xs">&lsaquo; Trước</button>
+                  <span class="page-indicator">Trang <strong id="tr-page-num">1</strong> / <span id="tr-total-num">31</span></span>
+                  <button id="btn-tr-next" class="btn btn-outline btn-xs">Sau &rsaquo;</button>
+                  <button id="btn-close-transcript" class="btn btn-outline btn-xs">Đóng &times;</button>
+                </div>
+              </div>
+              <div class="transcript-scroll">
+                <img id="transcript-image" class="page-image fit" alt="Transcript Listening" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT: OMR ANSWER SHEET -->
+        <aside class="pane-right">
+          <div class="omr-tabs" id="omr-part-tabs">
+            <button class="omr-tab active" data-part="all">Tất cả</button>
+            <button class="omr-tab" data-part="1">P1</button>
+            <button class="omr-tab" data-part="2">P2</button>
+            <button class="omr-tab" data-part="3">P3</button>
+            <button class="omr-tab" data-part="4">P4</button>
+            <button class="omr-tab" data-part="5">P5</button>
+            <button class="omr-tab" data-part="6">P6</button>
+            <button class="omr-tab" data-part="7">P7</button>
+          </div>
+
+          <div id="review-filter-bar" class="review-filter-bar hidden">
+            <button class="filter-chip active" data-filter="all">Tất cả</button>
+            <button class="filter-chip" data-filter="wrong">Câu sai</button>
+            <button class="filter-chip" data-filter="correct">Câu đúng</button>
+            <button class="filter-chip" data-filter="flagged">Cắm cờ</button>
+          </div>
+
+          <div id="omr-list" class="omr-list">
+            <!-- Question rows rendered by app.js -->
+          </div>
+          <div id="q-feedback-bar" class="q-feedback-bar hidden"></div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- RESULT SUMMARY MODAL -->
+    <div id="modal-result" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-box">
+        <div class="modal-head">
+          <h2>Kết quả bài thi</h2>
+          <button id="btn-close-result" class="btn btn-outline btn-xs">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="score-cards">
+            <div class="score-card">
+              <div class="score-label">Listening</div>
+              <div class="score-val" id="res-lc-raw">0/100</div>
+              <div class="score-sub" id="res-lc-scaled">~5 điểm</div>
+            </div>
+            <div class="score-card">
+              <div class="score-label">Reading</div>
+              <div class="score-val" id="res-rc-raw">0/100</div>
+              <div class="score-sub" id="res-rc-scaled">~5 điểm</div>
+            </div>
+            <div class="score-card score-card-total">
+              <div class="score-label">Tổng điểm ước lượng</div>
+              <div class="score-val" id="res-total-scaled">10</div>
+              <div class="score-sub" id="res-total-raw">0/200 câu đúng</div>
+            </div>
+          </div>
+
+          <table class="data-table compact">
+            <thead>
+              <tr>
+                <th>Phần thi</th>
+                <th>Số câu đúng</th>
+                <th>Tỷ lệ</th>
+              </tr>
+            </thead>
+            <tbody id="res-part-tbody"></tbody>
+          </table>
+        </div>
+        <div class="modal-foot">
+          <button id="btn-result-to-dash" class="btn btn-outline">Về trang chủ</button>
+          <button id="btn-result-review" class="btn btn-primary">Xem lại chi tiết &amp; Đáp án</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTE MODAL -->
+    <div id="modal-note" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-box modal-sm">
+        <div class="modal-head">
+          <h3 id="note-modal-title">Ghi chú câu hỏi</h3>
+          <button id="btn-close-note" class="btn btn-outline btn-xs">&times;</button>
+        </div>
+        <div class="modal-body">
+          <textarea id="note-textarea" rows="5" placeholder="Ghi lại từ vựng mới, cấu trúc ngữ pháp hoặc lý do chọn nhầm..."></textarea>
+        </div>
+        <div class="modal-foot">
+          <button id="btn-save-note" class="btn btn-primary btn-sm">Lưu ghi chú</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <audio id="audio-el" preload="auto"></audio>
+  <script defer src="data/words_data.js"></script>
+  <script defer src="data/grammar_data.js"></script>
+  <script defer src="js/storage.js?v=2"></script>
+  <script defer src="js/player.js?v=2"></script>
+  <script defer src="js/app.js?v=5"></script>
+</body>
+</html>
