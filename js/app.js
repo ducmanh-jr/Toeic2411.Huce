@@ -1,6 +1,7 @@
 const App = (() => {
   let TESTS = {};
   let ANSWERS = {};
+  let EXPLANATIONS = {};
 
   // Active session state
   let session = null;
@@ -85,40 +86,102 @@ const App = (() => {
     return Math.min(29, 20 + Math.floor((q - 71) / 3));
   }
 
-  function updateFeedbackBar(q) {
-    const bar = document.getElementById('q-feedback-bar');
-    if (!session || (!session.isReview && !session.checkedQs[q])) {
-      bar.classList.add('hidden');
+  function getPageQuestions(testId, pageNum) {
+    const meta = TESTS[testId];
+    if (!meta || !meta.qMap) return [];
+    return Object.keys(meta.qMap)
+      .map(Number)
+      .filter((q) => meta.qMap[String(q)].p === pageNum)
+      .sort((a, b) => a - b);
+  }
+
+  function renderPageExplanations() {
+    if (!session) return;
+    const pageQs = getPageQuestions(session.testId, session.currentPage);
+    const summaryEl = document.getElementById('page-exp-summary');
+    const drawerEl = document.getElementById('page-exp-drawer');
+    const contentEl = document.getElementById('page-exp-content');
+    const toggleBtn = document.getElementById('btn-toggle-page-exp');
+    const iconEl = document.getElementById('page-exp-btn-icon');
+    const labelEl = document.getElementById('page-exp-btn-label');
+
+    if (pageQs.length > 0) {
+      summaryEl.textContent = `Trang ${session.currentPage} · ${pageQs.length} câu (${pageQs[0]}–${pageQs[pageQs.length - 1]})`;
+    } else {
+      summaryEl.textContent = `Trang ${session.currentPage} · Trang hướng dẫn / đoạn văn`;
+    }
+
+    toggleBtn.classList.toggle('open', !!session.pageExpOpen);
+    iconEl.textContent = session.pageExpOpen ? '▼' : '▲';
+    labelEl.textContent = session.pageExpOpen
+      ? 'Ẩn đáp án & Giải thích (Trang này)'
+      : 'Hiện đáp án & Giải thích (Trang này)';
+    drawerEl.classList.toggle('hidden', !session.pageExpOpen);
+
+    if (!session.pageExpOpen) return;
+
+    if (pageQs.length === 0) {
+      const nextQs = getPageQuestions(session.testId, session.currentPage + 1);
+      const jumpHtml = nextQs.length
+        ? `<button class="btn btn-primary btn-xs" id="btn-jump-next-qpage">Xem trang câu hỏi tiếp theo (Trang ${session.currentPage + 1}: Câu ${nextQs[0]}–${nextQs[nextQs.length - 1]})</button>`
+        : '';
+      contentEl.innerHTML = `<div class="page-exp-item"><div class="page-exp-item-body">Trang này là trang hướng dẫn hoặc đoạn văn đọc hiểu (câu hỏi nằm ở trang kế tiếp).</div>${jumpHtml ? `<div class="page-exp-lc-actions">${jumpHtml}</div>` : ''}</div>`;
+      const jBtn = document.getElementById('btn-jump-next-qpage');
+      if (jBtn) {
+        jBtn.onclick = () => {
+          session.currentPage += 1;
+          renderPage();
+        };
+      }
       return;
     }
-    const ca = ANSWERS[session.testId][q - 1];
-    const ua = session.userAnswers[q];
-    const isOk = ua === ca;
-    const statusText = !ua ? `Chưa chọn · Đáp án đúng: <strong>${ca}</strong>` : isOk ? `<strong style="color:var(--green)">Chính xác (${ca})</strong>` : `<strong style="color:var(--red)">Sai (${ua})</strong> · Đáp án đúng: <strong>${ca}</strong>`;
-    const actionBtn = q <= 100
-      ? `<button class="btn btn-primary btn-xs" id="btn-fb-transcript">Xem Script &amp; Giải thích</button>`
-      : `<button class="btn btn-outline btn-xs" id="btn-fb-note">Ghi chú câu ${q}</button>`;
 
-    bar.innerHTML = `<div>Câu <strong>${q}</strong>: ${statusText}</div>${actionBtn}`;
-    bar.classList.remove('hidden');
+    const correctArr = ANSWERS[session.testId] || [];
+    const testExp = EXPLANATIONS[session.testId] || {};
+    const notes = Storage.getAllNotes();
 
-    const trBtn = document.getElementById('btn-fb-transcript');
-    if (trBtn) {
-      trBtn.onclick = () => {
-        session.trPage = qToTranscriptPage(session.testId, q);
-        renderTranscriptPage();
-        document.getElementById('transcript-panel').classList.remove('hidden');
-      };
-    }
-    const nBtn = document.getElementById('btn-fb-note');
-    if (nBtn) {
-      nBtn.onclick = () => {
-        noteTarget = { testId: session.testId, q };
-        document.getElementById('note-modal-title').textContent = `Ghi chú — Test ${session.testId}, Câu ${q}`;
-        document.getElementById('note-textarea').value = Storage.getNote(session.testId, q);
-        document.getElementById('modal-note').classList.remove('hidden');
-      };
-    }
+    contentEl.innerHTML = pageQs.map((q) => {
+      const ca = correctArr[q - 1] || '';
+      const ua = session.userAnswers[q] || '';
+      const isOk = ua === ca;
+      const statusHtml = !ua
+        ? `<span class="muted-text">Chưa chọn</span>`
+        : isOk
+          ? `<span class="status-pill ok">Bạn chọn ${ua} · Đúng</span>`
+          : `<span class="status-pill err">Bạn chọn ${ua} · Sai</span>`;
+
+      if (q <= 100) {
+        const trPage = qToTranscriptPage(session.testId, q);
+        return `
+          <div class="page-exp-item">
+            <div class="page-exp-item-head">
+              <div class="page-exp-item-title">
+                <strong>Câu ${q}</strong>
+                <span class="badge">Đáp án: ${ca}</span>
+                ${statusHtml}
+              </div>
+              <button class="btn btn-outline btn-xs" data-exp-tr="${q}">Xem Transcript &amp; Dịch nghĩa (Tr. ${trPage})</button>
+            </div>
+          </div>
+        `;
+      }
+
+      const expText = testExp[String(q)] || 'Chưa có giải thích chi tiết cho câu này.';
+      const noteText = notes[`${session.testId}_${q}`] || '';
+      return `
+        <div class="page-exp-item">
+          <div class="page-exp-item-head">
+            <div class="page-exp-item-title">
+              <strong>Câu ${q}</strong>
+              <span class="badge">Đáp án: ${ca}</span>
+              ${statusHtml}
+            </div>
+            <button class="btn btn-outline btn-xs" data-exp-note="${q}">${noteText ? 'Sửa ghi chú' : '+ Ghi chú'}</button>
+          </div>
+          <div class="page-exp-item-body">${expText}${noteText ? `\n📝 Ghi chú của bạn: ${noteText}` : ''}</div>
+        </div>
+      `;
+    }).join('');
   }
 
   // ================= DASHBOARD =================
@@ -187,27 +250,28 @@ const App = (() => {
       userAnswers: { ...userAnswers },
       flags: { ...flags },
       currentQ: currentQ || qList[0],
+      expandedQ: null,
       currentPage: meta.qMap[String(currentQ || qList[0])].p,
       trPage: 1,
       isReview,
-      instantKey: mode === 'part',
+      pageExpOpen: isReview,
       omrPartFilter: 'all',
       reviewFilter: 'all',
-      checkedQs: {},
     };
 
     document.getElementById('exam-title').textContent = `Test ${testId}`;
     document.getElementById('exam-mode-badge').textContent = isReview ? 'Xem lại & Đáp án' : modeLabel;
     document.getElementById('tr-total-num').textContent = meta.transcriptCount;
 
+    // Default zoom to 85%
+    document.getElementById('select-zoom').value = '0.85';
+    applyZoom();
+
     // Toggle UI controls based on mode
     const btnSubmit = document.getElementById('btn-submit-exam');
     const btnSummary = document.getElementById('btn-show-summary');
     const btnTranscript = document.getElementById('btn-toggle-transcript');
     const reviewBar = document.getElementById('review-filter-bar');
-    const instantToggle = document.getElementById('toggle-instant-key');
-    instantToggle.checked = session.instantKey;
-    instantToggle.closest('label').classList.toggle('hidden', isReview);
 
     document.getElementById('transcript-panel').classList.add('hidden');
     if (isReview) {
@@ -331,6 +395,8 @@ const App = (() => {
     // Sync Part dropdown
     const partAtPage = [...meta.parts].reverse().find((pt) => p >= pt.page);
     if (partAtPage) document.getElementById('select-part-jump').value = String(partAtPage.part);
+
+    renderPageExplanations();
   }
 
   function renderTranscriptPage() {
@@ -373,18 +439,17 @@ const App = (() => {
       AudioPlayer.loadTrack(session.testId, null, '', false);
     }
 
-    // Highlight active OMR row
-    document.querySelectorAll('.omr-row').forEach((row) => {
-      const rq = Number(row.dataset.q);
-      row.classList.toggle('active-q', rq === q);
+    // Highlight active OMR chip
+    document.querySelectorAll('.omr-q-chip').forEach((chip) => {
+      const rq = Number(chip.dataset.q);
+      chip.classList.toggle('active-q', rq === q);
       if (rq === q) {
-        row.scrollIntoView({ block: 'nearest' });
+        chip.scrollIntoView({ block: 'nearest' });
       }
     });
-    updateFeedbackBar(q);
   }
 
-  // ================= OMR SHEET =================
+  // ================= OMR SHEET (COLLAPSED GRID + INLINE EXPAND) =================
   function renderOMR() {
     const listEl = document.getElementById('omr-list');
     const correctArr = ANSWERS[session.testId];
@@ -406,72 +471,76 @@ const App = (() => {
     });
 
     if (!filteredQs.length) {
-      listEl.innerHTML = '<div class="empty-cell">Không có câu hỏi nào khớp bộ lọc.</div>';
+      listEl.innerHTML = '<div class="empty-cell" style="grid-column:1/-1">Không có câu hỏi nào khớp bộ lọc.</div>';
       return;
     }
 
+    const expIdx = session.expandedQ ? filteredQs.indexOf(session.expandedQ) : -1;
+    const insertAfterIdx = expIdx >= 0 ? Math.min(filteredQs.length - 1, Math.floor(expIdx / 4) * 4 + 3) : -1;
+
     const frag = document.createDocumentFragment();
-    filteredQs.forEach((q) => {
+    filteredQs.forEach((q, idx) => {
       const ua = session.userAnswers[q] || '';
       const ca = correctArr[q - 1];
-      const showKey = session.isReview || !!session.checkedQs[q] || (session.instantKey && !!ua);
       const isFlagged = !!session.flags[q];
-      const noteText = notes[`${session.testId}_${q}`] || '';
-      const hasNote = !!noteText;
 
-      const wrap = document.createElement('div');
-      wrap.className = 'omr-row-wrap';
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      let cls = 'omr-q-chip';
+      if (session.currentQ === q) cls += ' active-q';
+      if (session.isReview) {
+        cls += ua === ca ? ' is-correct' : ' is-wrong';
+      } else if (ua) {
+        cls += ' answered';
+      }
+      chip.className = cls;
+      chip.dataset.q = q;
+      chip.innerHTML = `<span>${q}</span>${ua ? `<span class="omr-chip-ans">·${ua}</span>` : ''}${isFlagged ? '<span class="omr-chip-flag">⚑</span>' : ''}`;
+      frag.appendChild(chip);
 
-      const row = document.createElement('div');
-      row.className = `omr-row${session.currentQ === q ? ' active-q' : ''}`;
-      row.dataset.q = q;
+      if (idx === insertAfterIdx) {
+        const eq = session.expandedQ;
+        const eua = session.userAnswers[eq] || '';
+        const eca = correctArr[eq - 1];
+        const eFlagged = !!session.flags[eq];
+        const eHasNote = !!(notes[`${session.testId}_${eq}`]);
 
-      let optsHtml = '';
-      ['A', 'B', 'C', 'D'].forEach((opt) => {
-        if (q >= 7 && q <= 31 && opt === 'D') return;
-        let cls = 'opt-btn';
-        if (showKey) {
-          if (opt === ca) cls += ' correct';
-          else if (opt === ua && ua !== ca) cls += ' wrong';
-        } else if (opt === ua) {
-          cls += ' selected';
+        let optsHtml = '';
+        ['A', 'B', 'C', 'D'].forEach((opt) => {
+          if (eq >= 7 && eq <= 31 && opt === 'D') return;
+          let ocls = 'opt-btn';
+          if (session.isReview) {
+            if (opt === eca) ocls += ' correct';
+            else if (opt === eua && eua !== eca) ocls += ' wrong';
+          } else if (opt === eua) {
+            ocls += ' selected';
+          }
+          optsHtml += `<button type="button" class="${ocls}" data-q="${eq}" data-opt="${opt}">${opt}</button>`;
+        });
+
+        let statusHtml = '';
+        if (session.isReview) {
+          statusHtml = eua === eca
+            ? `<div class="omr-exp-status" style="color:var(--green);font-weight:600">Chính xác (${eca})</div>`
+            : `<div class="omr-exp-status" style="color:var(--red);font-weight:600">Bạn chọn: ${eua || '—'} · Đáp án đúng: ${eca}</div>`;
         }
-        optsHtml += `<button class="${cls}" data-q="${q}" data-opt="${opt}">${opt}</button>`;
-      });
 
-      let statusHtml = '';
-      if (showKey) {
-        if (ua === ca) statusHtml = '<span class="status-pill ok">Đúng</span>';
-        else statusHtml = `<span class="status-pill err">${ua || '—'}→${ca}</span>`;
-      }
-
-      row.innerHTML = `
-        <span class="q-num">${q}.</span>
-        <div class="q-opts">${optsHtml}</div>
-        <div class="q-actions">
+        const card = document.createElement('div');
+        card.className = 'omr-expanded-card';
+        card.innerHTML = `
+          <div class="omr-exp-head">
+            <span class="omr-exp-title">Câu ${eq}</span>
+            <div class="q-actions">
+              ${eq <= 100 ? `<button type="button" class="icon-btn" data-listen="${eq}" title="Nghe câu này">♪</button>` : ''}
+              <button type="button" class="icon-btn${eFlagged ? ' flagged' : ''}" data-flag="${eq}" title="Cắm cờ">⚑</button>
+              ${session.isReview ? `<button type="button" class="icon-btn${eHasNote ? ' has-note' : ''}" data-note="${eq}" title="Ghi chú">✎</button>` : ''}
+            </div>
+          </div>
+          <div class="omr-exp-opts">${optsHtml}</div>
           ${statusHtml}
-          ${!session.isReview && !showKey ? `<button class="icon-btn" data-check="${q}" title="Xem đáp án câu này">Dò</button>` : ''}
-          ${q <= 100 ? `<button class="icon-btn" data-listen="${q}" title="Nghe câu này">♪</button>` : ''}
-          <button class="icon-btn${isFlagged ? ' flagged' : ''}" data-flag="${q}" title="Cắm cờ">⚑</button>
-          ${showKey ? `<button class="icon-btn${hasNote ? ' has-note' : ''}" data-note="${q}" title="Ghi chú">✎</button>` : ''}
-        </div>
-      `;
-      wrap.appendChild(row);
-
-      if (showKey) {
-        const exp = document.createElement('div');
-        exp.className = 'omr-inline-exp';
-        const label = ua === ca
-          ? `<span style="color:var(--green);font-weight:600">Đúng — Đáp án (${ca})</span>`
-          : `<span>Đáp án đúng: <strong>(${ca})</strong>${noteText ? ` · <em>${noteText}</em>` : ''}</span>`;
-        const btn = q <= 100
-          ? `<button class="btn btn-outline btn-xs" data-tr="${q}">Xem Script &amp; Giải thích</button>`
-          : `<button class="btn btn-outline btn-xs" data-note="${q}">${hasNote ? 'Sửa ghi chú' : '+ Ghi chú'}</button>`;
-        exp.innerHTML = `${label}${btn}`;
-        wrap.appendChild(exp);
+        `;
+        frag.appendChild(card);
       }
-
-      frag.appendChild(wrap);
     });
     listEl.appendChild(frag);
   }
@@ -484,21 +553,12 @@ const App = (() => {
   function chooseAnswer(q, opt) {
     if (session.isReview) return;
     session.userAnswers[q] = opt;
+    session.expandedQ = q;
     persistDraft();
     updateHeaderStats();
-
-    if (session.instantKey) {
-      renderOMR();
-    } else {
-      // Fast in-place DOM update instead of rebuilding all 200 OMR rows
-      const row = document.querySelector(`.omr-row[data-q="${q}"]`);
-      if (row) {
-        row.querySelectorAll('.opt-btn').forEach((btn) => {
-          btn.classList.toggle('selected', btn.dataset.opt === opt);
-        });
-      }
-    }
+    renderOMR();
     selectQuestion(q, false);
+    if (session.pageExpOpen) renderPageExplanations();
   }
 
   // ================= SUBMIT & RESULT =================
@@ -835,12 +895,29 @@ const App = (() => {
       exp.classList.remove('hidden');
     });
 
-    // Instant key toggle
-    document.getElementById('toggle-instant-key').addEventListener('change', (e) => {
+    // Bottom page explanation toggle & actions
+    document.getElementById('btn-toggle-page-exp').addEventListener('click', () => {
       if (!session) return;
-      session.instantKey = e.target.checked;
-      renderOMR();
-      updateFeedbackBar(session.currentQ);
+      session.pageExpOpen = !session.pageExpOpen;
+      renderPageExplanations();
+    });
+    document.getElementById('page-exp-content').addEventListener('click', (e) => {
+      const trBtn = e.target.closest('[data-exp-tr]');
+      if (trBtn) {
+        const q = Number(trBtn.dataset.expTr);
+        session.trPage = qToTranscriptPage(session.testId, q);
+        renderTranscriptPage();
+        document.getElementById('transcript-panel').classList.remove('hidden');
+        return;
+      }
+      const noteBtn = e.target.closest('[data-exp-note]');
+      if (noteBtn) {
+        const q = Number(noteBtn.dataset.expNote);
+        noteTarget = { testId: session.testId, q };
+        document.getElementById('note-modal-title').textContent = `Ghi chú — Test ${session.testId}, Câu ${q}`;
+        document.getElementById('note-textarea').value = Storage.getNote(session.testId, q);
+        document.getElementById('modal-note').classList.remove('hidden');
+      }
     });
 
     // Dictation toggle
@@ -949,7 +1026,7 @@ const App = (() => {
       renderOMR();
     });
 
-    // OMR Row interactions
+    // OMR Chip & Expanded Card interactions
     document.getElementById('omr-list').addEventListener('click', (e) => {
       const optBtn = e.target.closest('.opt-btn');
       if (optBtn) {
@@ -962,22 +1039,6 @@ const App = (() => {
         session.flags[q] = !session.flags[q];
         persistDraft();
         renderOMR();
-        return;
-      }
-      const trBtn = e.target.closest('[data-tr]');
-      if (trBtn) {
-        const q = Number(trBtn.dataset.tr);
-        session.trPage = qToTranscriptPage(session.testId, q);
-        renderTranscriptPage();
-        document.getElementById('transcript-panel').classList.remove('hidden');
-        return;
-      }
-      const checkBtn = e.target.closest('[data-check]');
-      if (checkBtn) {
-        const q = Number(checkBtn.dataset.check);
-        session.checkedQs[q] = !session.checkedQs[q];
-        renderOMR();
-        selectQuestion(q, false);
         return;
       }
       const listenBtn = e.target.closest('[data-listen]');
@@ -994,9 +1055,12 @@ const App = (() => {
         document.getElementById('modal-note').classList.remove('hidden');
         return;
       }
-      const row = e.target.closest('.omr-row');
-      if (row) {
-        selectQuestion(Number(row.dataset.q), false);
+      const chip = e.target.closest('.omr-q-chip');
+      if (chip) {
+        const q = Number(chip.dataset.q);
+        session.expandedQ = session.expandedQ === q ? null : q;
+        renderOMR();
+        selectQuestion(q, false);
       }
     });
 
@@ -1027,6 +1091,7 @@ const App = (() => {
       Storage.saveNote(noteTarget.testId, noteTarget.q, document.getElementById('note-textarea').value);
       document.getElementById('modal-note').classList.add('hidden');
       renderOMR();
+      if (session && session.pageExpOpen) renderPageExplanations();
     });
 
     // Audio Auto-next
@@ -1055,11 +1120,21 @@ const App = (() => {
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         const idx = session.qList.indexOf(session.currentQ);
-        if (idx >= 0 && idx + 1 < session.qList.length) selectQuestion(session.qList[idx + 1], false);
+        if (idx >= 0 && idx + 1 < session.qList.length) {
+          const nextQ = session.qList[idx + 1];
+          session.expandedQ = nextQ;
+          renderOMR();
+          selectQuestion(nextQ, false);
+        }
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         const idx = session.qList.indexOf(session.currentQ);
-        if (idx > 0) selectQuestion(session.qList[idx - 1], false);
+        if (idx > 0) {
+          const prevQ = session.qList[idx - 1];
+          session.expandedQ = prevQ;
+          renderOMR();
+          selectQuestion(prevQ, false);
+        }
       } else if (key === 'F') {
         session.flags[session.currentQ] = !session.flags[session.currentQ];
         persistDraft();
@@ -1073,9 +1148,16 @@ const App = (() => {
 
   async function init() {
     try {
-      const [tRes, aRes] = await Promise.all([fetch('data/tests.json'), fetch('data/answers.json')]);
+      const [tRes, aRes, eRes] = await Promise.all([
+        fetch('data/tests.json'),
+        fetch('data/answers.json'),
+        fetch('data/explanations.json').catch(() => null),
+      ]);
       TESTS = await tRes.json();
       ANSWERS = await aRes.json();
+      if (eRes && eRes.ok) {
+        EXPLANATIONS = await eRes.json();
+      }
       bindEvents();
       renderDashboard();
     } catch (err) {

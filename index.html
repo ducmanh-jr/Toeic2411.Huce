@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MA TOEIC Practice — Test 3, 4, 5</title>
-  <link rel="stylesheet" href="css/style.css?v=5" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
 </head>
 <body>
   <div id="app">
@@ -147,9 +147,6 @@
         </div>
 
         <div class="exam-header-right">
-          <label class="instant-key-toggle" title="Hiện đáp án &amp; giải thích ngay bên dưới mỗi câu khi chọn">
-            <input id="toggle-instant-key" type="checkbox" /> Hiện đáp án &amp; Giải thích
-          </label>
           <button id="btn-toggle-transcript" class="btn btn-outline btn-sm hidden">Xem Transcript</button>
           <button id="btn-submit-exam" class="btn btn-primary btn-sm">Nộp bài</button>
           <button id="btn-show-summary" class="btn btn-primary btn-sm hidden">Bảng điểm</button>
@@ -177,7 +174,7 @@
               </select>
               <select id="select-zoom" class="select-xs" title="Thu phóng trang đề">
                 <option value="fit">Vừa khung</option>
-                <option value="0.85">85%</option>
+                <option value="0.85" selected>85%</option>
                 <option value="1">100%</option>
                 <option value="1.25">125%</option>
                 <option value="1.5">150%</option>
@@ -220,7 +217,7 @@
           <!-- Exam Page Canvas OR Transcript Drawer -->
           <div class="viewer-body">
             <div id="page-scroll" class="page-scroll">
-              <img id="page-image" class="page-image fit" alt="Trang đề TOEIC" />
+              <img id="page-image" class="page-image" alt="Trang đề TOEIC" />
             </div>
 
             <div id="transcript-panel" class="transcript-panel hidden">
@@ -238,6 +235,20 @@
               <div class="transcript-scroll">
                 <img id="transcript-image" class="page-image fit" alt="Transcript Listening" />
               </div>
+            </div>
+          </div>
+
+          <!-- Bottom Page Explanation Bar & Drawer -->
+          <div id="page-exp-container" class="page-exp-container">
+            <div class="page-exp-bar">
+              <button id="btn-toggle-page-exp" class="btn btn-outline btn-sm page-exp-toggle-btn" type="button">
+                <span id="page-exp-btn-icon">▲</span>
+                <span id="page-exp-btn-label">Hiện đáp án &amp; Giải thích (Trang này)</span>
+              </button>
+              <span id="page-exp-summary" class="page-exp-summary"></span>
+            </div>
+            <div id="page-exp-drawer" class="page-exp-drawer hidden">
+              <div id="page-exp-content" class="page-exp-content"></div>
             </div>
           </div>
         </section>
@@ -263,9 +274,8 @@
           </div>
 
           <div id="omr-list" class="omr-list">
-            <!-- Question rows rendered by app.js -->
+            <!-- Question chips & expanded picker rendered by app.js -->
           </div>
-          <div id="q-feedback-bar" class="q-feedback-bar hidden"></div>
         </aside>
       </div>
     </div>
@@ -338,6 +348,6 @@
   <script defer src="data/grammar_data.js"></script>
   <script defer src="js/storage.js?v=2"></script>
   <script defer src="js/player.js?v=2"></script>
-  <script defer src="js/app.js?v=5"></script>
+  <script defer src="js/app.js?v=6"></script>
 </body>
 </html>
