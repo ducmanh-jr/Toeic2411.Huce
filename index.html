@@ -41,6 +41,18 @@
           </div>
         </section>
 
+        <section class="study-tabs-bar" aria-label="Chế độ học">
+          <div class="study-tabs-info">
+            <strong>Chế độ học</strong>
+            <span>Khoanh sẵn đáp án &amp; xem giải thích trực tiếp trên đề (200 câu)</span>
+          </div>
+          <div class="study-tabs-group">
+            <button type="button" class="btn btn-outline study-tab-btn" data-study="3">Học Test 3</button>
+            <button type="button" class="btn btn-outline study-tab-btn" data-study="4">Học Test 4</button>
+            <button type="button" class="btn btn-outline study-tab-btn" data-study="5">Học Test 5</button>
+          </div>
+        </section>
+
         <section class="test-grid" id="test-cards-container">
           <!-- Rendered by app.js -->
         </section>
@@ -157,10 +169,10 @@
         <!-- LEFT: EXAM PAPER + AUDIO + TRANSCRIPT -->
         <section class="pane-left">
           <!-- Page & Zoom Toolbar -->
-          <div class="viewer-toolbar">
+          <div id="viewer-toolbar" class="viewer-toolbar">
             <div class="toolbar-group">
-              <button id="btn-prev-page" class="btn btn-outline btn-xs">&lsaquo; Trước</button>
-              <button id="btn-next-page" class="btn btn-outline btn-xs">Sau &rsaquo;</button>
+              <button id="btn-prev-page" class="btn btn-outline btn-xs" type="button" title="Trang trước">&lsaquo; Trước</button>
+              <button id="btn-next-page" class="btn btn-outline btn-xs" type="button" title="Trang sau">Sau &rsaquo;</button>
             </div>
             <div class="toolbar-group">
               <select id="select-part-jump" class="select-xs" title="Nhảy tới Part">
@@ -172,37 +184,38 @@
                 <option value="6">Part 6 (131–146)</option>
                 <option value="7">Part 7 (147–200)</option>
               </select>
-              <select id="select-zoom" class="select-xs" title="Thu phóng trang đề">
+              <select id="select-zoom" class="select-xs is-secondary-ctrl" title="Thu phóng trang đề">
                 <option value="fit">Vừa khung</option>
                 <option value="0.85" selected>85%</option>
                 <option value="1">100%</option>
                 <option value="1.25">125%</option>
                 <option value="1.5">150%</option>
               </select>
+              <button id="btn-mobile-settings" class="btn btn-outline btn-xs mobile-only" type="button" title="Cài đặt hiển thị &amp; âm thanh" aria-expanded="false">⚙ Cài đặt</button>
             </div>
           </div>
 
           <!-- Audio Player Bar -->
           <div id="audio-bar" class="audio-bar">
-            <button id="btn-audio-play" class="btn btn-primary btn-xs">▶ Phát</button>
-            <button id="btn-audio-rew" class="btn btn-outline btn-xs">-5s</button>
-            <button id="btn-audio-fwd" class="btn btn-outline btn-xs">+5s</button>
+            <button id="btn-audio-play" class="btn btn-primary btn-xs" type="button">▶ Phát</button>
+            <button id="btn-audio-rew" class="btn btn-outline btn-xs is-secondary-ctrl" type="button">-5s</button>
+            <button id="btn-audio-fwd" class="btn btn-outline btn-xs is-secondary-ctrl" type="button">+5s</button>
             <span id="audio-track-label" class="audio-label">Q1</span>
             <input id="audio-seek" type="range" min="0" max="100" value="0" class="audio-seek" />
             <span id="audio-time" class="audio-time">00:00 / 00:00</span>
-            <select id="audio-speed" class="select-xs" title="Tốc độ phát">
+            <select id="audio-speed" class="select-xs is-secondary-ctrl" title="Tốc độ phát">
               <option value="0.85">0.85x</option>
               <option value="1" selected>1.0x</option>
               <option value="1.15">1.15x</option>
               <option value="1.25">1.25x</option>
             </select>
-            <label class="auto-next-label" title="Lặp lại đoạn audio hiện tại">
+            <label class="auto-next-label is-secondary-ctrl" title="Lặp lại đoạn audio hiện tại">
               <input id="audio-loop" type="checkbox" /> Loop
             </label>
-            <label class="auto-next-label" title="Tự động chuyển sang câu tiếp theo">
+            <label class="auto-next-label is-secondary-ctrl" title="Tự động chuyển sang câu tiếp theo">
               <input id="audio-auto-next" type="checkbox" checked /> Auto
             </label>
-            <button id="btn-toggle-dictation" class="btn btn-outline btn-xs" title="Mở khung chép chính tả">Chép chính tả</button>
+            <button id="btn-toggle-dictation" class="btn btn-outline btn-xs is-secondary-ctrl" type="button" title="Mở khung chép chính tả">Chép chính tả</button>
           </div>
 
           <!-- Dictation Practice Box -->
@@ -216,8 +229,18 @@
 
           <!-- Exam Page Canvas OR Transcript Drawer -->
           <div class="viewer-body">
+            <div id="study-answer-strip" class="study-answer-strip hidden"></div>
             <div id="page-scroll" class="page-scroll">
-              <img id="page-image" class="page-image" alt="Trang đề TOEIC" />
+              <div id="page-stage" class="page-stage">
+                <img id="page-image" class="page-image" alt="Trang đề TOEIC" />
+                <div id="page-answer-overlay" class="page-answer-overlay hidden"></div>
+              </div>
+            </div>
+
+            <div id="floating-q-nav" class="floating-q-nav" aria-label="Điều hướng câu hỏi">
+              <button id="btn-prev-q" class="btn btn-outline btn-sm" type="button" title="Câu trước">&lsaquo;</button>
+              <span id="toolbar-q-label" class="floating-q-label"><strong>Câu 1</strong></span>
+              <button id="btn-next-q" class="btn btn-primary btn-sm" type="button" title="Sang câu tiếp theo">Tiếp &rsaquo;</button>
             </div>
 
             <div id="transcript-panel" class="transcript-panel hidden">
@@ -253,8 +276,25 @@
           </div>
         </section>
 
-        <!-- RIGHT: OMR ANSWER SHEET -->
-        <aside class="pane-right">
+        <div id="mobile-omr-backdrop" class="mobile-omr-backdrop hidden"></div>
+
+        <!-- RIGHT: OMR ANSWER SHEET / MOBILE DRAWER -->
+        <aside id="pane-right" class="pane-right">
+          <div class="omr-drawer-head mobile-only">
+            <div class="omr-drawer-title">
+              <strong>Danh sách câu hỏi</strong>
+              <span id="omr-drawer-stats" class="badge">0/200</span>
+            </div>
+            <button id="btn-close-omr-drawer" class="btn btn-outline btn-xs" type="button">Đóng &times;</button>
+          </div>
+
+          <div class="omr-legend">
+            <span class="legend-item"><i class="legend-dot answered"></i>Đã trả lời</span>
+            <span class="legend-item"><i class="legend-dot active"></i>Đang chọn</span>
+            <span class="legend-item"><i class="legend-dot flagged"></i>Đánh dấu</span>
+            <span class="legend-item"><i class="legend-dot"></i>Chưa làm</span>
+          </div>
+
           <div class="omr-tabs" id="omr-part-tabs">
             <button class="omr-tab active" data-part="all">Tất cả</button>
             <button class="omr-tab" data-part="1">P1</button>
@@ -277,6 +317,26 @@
             <!-- Question chips & expanded picker rendered by app.js -->
           </div>
         </aside>
+      </div>
+
+      <!-- MOBILE BOTTOM QUICK ANSWER & NAVIGATOR BAR -->
+      <div id="mobile-bottom-bar" class="mobile-bottom-bar mobile-only">
+        <div class="mobile-quick-row">
+          <button id="btn-mobile-q-prev" class="btn btn-outline mobile-q-step" type="button" title="Câu trước">&lsaquo;</button>
+          <span id="mobile-current-q-label" class="mobile-q-label">Câu 1</span>
+          <div id="mobile-quick-opts" class="mobile-quick-opts">
+            <button type="button" class="opt-btn" data-mobile-opt="A">A</button>
+            <button type="button" class="opt-btn" data-mobile-opt="B">B</button>
+            <button type="button" class="opt-btn" data-mobile-opt="C">C</button>
+            <button type="button" class="opt-btn" data-mobile-opt="D">D</button>
+          </div>
+          <button id="btn-mobile-q-flag" class="btn btn-outline mobile-q-flag" type="button" title="Đánh dấu câu này">⚑</button>
+          <button id="btn-mobile-q-next" class="btn btn-outline mobile-q-step" type="button" title="Câu sau">&rsaquo;</button>
+        </div>
+        <button id="btn-open-omr-drawer" class="btn btn-outline mobile-drawer-trigger" type="button">
+          <span>Danh sách câu hỏi</span>
+          <strong id="mobile-drawer-progress">0/200</strong>
+        </button>
       </div>
     </div>
 

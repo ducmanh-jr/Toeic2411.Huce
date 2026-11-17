@@ -2,6 +2,7 @@ const App = (() => {
   let TESTS = {};
   let ANSWERS = {};
   let EXPLANATIONS = {};
+  let ANSWER_COORDS = {};
 
   // Active session state
   let session = null;
@@ -95,18 +96,67 @@ const App = (() => {
       .sort((a, b) => a - b);
   }
 
+  function canShowAnswers() {
+    return !!session && (session.isReview || session.mode === 'part' || session.isStudy);
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function formatExplanationHtml(raw) {
+    if (!raw) return '';
+    return String(raw)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const safe = escapeHtml(line);
+        if (/^Đáp án\s*:/i.test(safe)) {
+          return `<div class="exp-line exp-line-ans">${safe.replace(/^Đáp án\s*:/i, '<strong>Đáp án:</strong>')}</div>`;
+        }
+        const m = safe.match(/^(•\s*[^:]{2,35}:)(.*)$/);
+        if (m) {
+          return `<div class="exp-line"><strong class="exp-label">${m[1]}</strong>${m[2]}</div>`;
+        }
+        return `<div class="exp-line">${safe}</div>`;
+      })
+      .join('');
+  }
+
   function renderPageExplanations() {
     if (!session) return;
-    const pageQs = getPageQuestions(session.testId, session.currentPage);
-    const summaryEl = document.getElementById('page-exp-summary');
+    const expContainer = document.getElementById('page-exp-container');
     const drawerEl = document.getElementById('page-exp-drawer');
+    if (!canShowAnswers()) {
+      session.pageExpOpen = false;
+      if (expContainer) expContainer.classList.add('hidden');
+      if (drawerEl) drawerEl.classList.add('hidden');
+      return;
+    }
+    const pageQs = getPageQuestions(session.testId, session.currentPage);
+    const testExp = EXPLANATIONS[session.testId] || {};
+    const expQs = session.isStudy ? pageQs.filter((q) => !!testExp[String(q)]) : pageQs;
+
+    // In Study Mode, hide the entire explanation bar/drawer if no question on this page has an explanation
+    if (session.isStudy && expQs.length === 0) {
+      if (expContainer) expContainer.classList.add('hidden');
+      if (drawerEl) drawerEl.classList.add('hidden');
+      return;
+    }
+    if (expContainer) expContainer.classList.remove('hidden');
+
+    const summaryEl = document.getElementById('page-exp-summary');
     const contentEl = document.getElementById('page-exp-content');
     const toggleBtn = document.getElementById('btn-toggle-page-exp');
     const iconEl = document.getElementById('page-exp-btn-icon');
     const labelEl = document.getElementById('page-exp-btn-label');
 
-    if (pageQs.length > 0) {
-      summaryEl.textContent = `Trang ${session.currentPage} · ${pageQs.length} câu (${pageQs[0]}–${pageQs[pageQs.length - 1]})`;
+    if (expQs.length > 0) {
+      summaryEl.textContent = `Trang ${session.currentPage} · ${expQs.length} câu (${expQs[0]}–${expQs[expQs.length - 1]})`;
     } else {
       summaryEl.textContent = `Trang ${session.currentPage} · Trang hướng dẫn / đoạn văn`;
     }
@@ -120,7 +170,7 @@ const App = (() => {
 
     if (!session.pageExpOpen) return;
 
-    if (pageQs.length === 0) {
+    if (expQs.length === 0) {
       const nextQs = getPageQuestions(session.testId, session.currentPage + 1);
       const jumpHtml = nextQs.length
         ? `<button class="btn btn-primary btn-xs" id="btn-jump-next-qpage">Xem trang câu hỏi tiếp theo (Trang ${session.currentPage + 1}: Câu ${nextQs[0]}–${nextQs[nextQs.length - 1]})</button>`
@@ -137,23 +187,25 @@ const App = (() => {
     }
 
     const correctArr = ANSWERS[session.testId] || [];
-    const testExp = EXPLANATIONS[session.testId] || {};
     const notes = Storage.getAllNotes();
 
-    contentEl.innerHTML = pageQs.map((q) => {
+    contentEl.innerHTML = expQs.map((q) => {
       const ca = correctArr[q - 1] || '';
       const ua = session.userAnswers[q] || '';
       const isOk = ua === ca;
-      const statusHtml = !ua
-        ? `<span class="muted-text">Chưa chọn</span>`
-        : isOk
-          ? `<span class="status-pill ok">Bạn chọn ${ua} · Đúng</span>`
-          : `<span class="status-pill err">Bạn chọn ${ua} · Sai</span>`;
+      const activeCls = q === session.currentQ ? ' active' : '';
+      const statusHtml = session.isStudy
+        ? ''
+        : !ua
+          ? `<span class="muted-text">Chưa chọn</span>`
+          : isOk
+            ? `<span class="status-pill ok">Bạn chọn ${ua} · Đúng</span>`
+            : `<span class="status-pill err">Bạn chọn ${ua} · Sai</span>`;
 
       if (q <= 100) {
         const trPage = qToTranscriptPage(session.testId, q);
         return `
-          <div class="page-exp-item">
+          <div id="exp-item-${q}" class="page-exp-item${activeCls}">
             <div class="page-exp-item-head">
               <div class="page-exp-item-title">
                 <strong>Câu ${q}</strong>
@@ -168,8 +220,9 @@ const App = (() => {
 
       const expText = testExp[String(q)] || 'Chưa có giải thích chi tiết cho câu này.';
       const noteText = notes[`${session.testId}_${q}`] || '';
+      const noteHtml = noteText ? `<div class="exp-note-line">📝 <strong>Ghi chú của bạn:</strong> ${escapeHtml(noteText)}</div>` : '';
       return `
-        <div class="page-exp-item">
+        <div id="exp-item-${q}" class="page-exp-item${activeCls}">
           <div class="page-exp-item-head">
             <div class="page-exp-item-title">
               <strong>Câu ${q}</strong>
@@ -178,7 +231,7 @@ const App = (() => {
             </div>
             <button class="btn btn-outline btn-xs" data-exp-note="${q}">${noteText ? 'Sửa ghi chú' : '+ Ghi chú'}</button>
           </div>
-          <div class="page-exp-item-body">${expText}${noteText ? `\n📝 Ghi chú của bạn: ${noteText}` : ''}</div>
+          <div class="page-exp-item-body">${formatExplanationHtml(expText)}${noteHtml}</div>
         </div>
       `;
     }).join('');
@@ -239,9 +292,12 @@ const App = (() => {
   // ================= START / RESUME SESSION =================
   function startSession({ testId, mode, modeLabel, qList, durationSec, userAnswers = {}, flags = {}, currentQ = null, isReview = false }) {
     const meta = TESTS[testId];
+    const startQ = currentQ || qList[0];
+    const startPart = String(getPartOfQ(startQ));
+    const isStudy = mode === 'study';
     session = {
       testId,
-      mode, // 'full' | 'lc' | 'rc' | 'part' | 'review'
+      mode, // 'full' | 'lc' | 'rc' | 'part' | 'review' | 'study'
       modeLabel,
       qList,
       durationSec,
@@ -249,36 +305,59 @@ const App = (() => {
       elapsedSec: 0,
       userAnswers: { ...userAnswers },
       flags: { ...flags },
-      currentQ: currentQ || qList[0],
-      expandedQ: null,
-      currentPage: meta.qMap[String(currentQ || qList[0])].p,
+      currentQ: startQ,
+      expandedQ: startQ,
+      currentPage: meta.qMap[String(startQ)].p,
       trPage: 1,
       isReview,
+      isStudy,
       pageExpOpen: isReview,
-      omrPartFilter: 'all',
+      omrPartFilter: isStudy ? 'all' : startPart,
       reviewFilter: 'all',
     };
 
     document.getElementById('exam-title').textContent = `Test ${testId}`;
-    document.getElementById('exam-mode-badge').textContent = isReview ? 'Xem lại & Đáp án' : modeLabel;
+    document.getElementById('exam-mode-badge').textContent = isReview
+      ? 'Xem lại & Đáp án'
+      : isStudy
+        ? 'Chế độ học'
+        : modeLabel;
     document.getElementById('tr-total-num').textContent = meta.transcriptCount;
 
-    // Default zoom to 85%
-    document.getElementById('select-zoom').value = '0.85';
+    // Default zoom: 'fit' on mobile to prevent horizontal overflow, '0.85' on desktop
+    document.getElementById('select-zoom').value = window.innerWidth <= 768 ? 'fit' : '0.85';
     applyZoom();
+
+    // Reset mobile drawer & settings state
+    closeOmrDrawer();
+    const paneLeft = document.querySelector('.pane-left');
+    if (paneLeft) paneLeft.classList.remove('settings-open');
+    const mobileSettingsBtn = document.getElementById('btn-mobile-settings');
+    if (mobileSettingsBtn) {
+      mobileSettingsBtn.classList.remove('active');
+      mobileSettingsBtn.setAttribute('aria-expanded', 'false');
+    }
 
     // Toggle UI controls based on mode
     const btnSubmit = document.getElementById('btn-submit-exam');
     const btnSummary = document.getElementById('btn-show-summary');
     const btnTranscript = document.getElementById('btn-toggle-transcript');
     const reviewBar = document.getElementById('review-filter-bar');
+    const expContainer = document.getElementById('page-exp-container');
 
     document.getElementById('transcript-panel').classList.add('hidden');
+    views.exam.classList.toggle('is-study', isStudy);
+    if (expContainer) expContainer.classList.toggle('hidden', !canShowAnswers());
     if (isReview) {
       btnSubmit.classList.add('hidden');
       btnSummary.classList.remove('hidden');
       btnTranscript.classList.remove('hidden');
       reviewBar.classList.remove('hidden');
+    } else if (isStudy) {
+      btnSubmit.classList.add('hidden');
+      btnSummary.classList.add('hidden');
+      btnTranscript.classList.remove('hidden');
+      reviewBar.classList.add('hidden');
     } else {
       btnSubmit.classList.remove('hidden');
       btnSummary.classList.add('hidden');
@@ -298,7 +377,7 @@ const App = (() => {
         const hasAny = qList.some((q) => q >= partObj.start && q <= partObj.end);
         tab.classList.toggle('hidden', !hasAny);
       }
-      tab.classList.toggle('active', p === 'all');
+      tab.classList.toggle('active', p === session.omrPartFilter);
     });
 
     showView('exam');
@@ -308,10 +387,11 @@ const App = (() => {
     selectQuestion(session.currentQ, false);
     updateHeaderStats();
 
-    if (!isReview) {
+    if (!isReview && !isStudy) {
       startTimer();
     } else {
-      document.getElementById('exam-timer').textContent = 'Đã nộp';
+      stopTimer();
+      document.getElementById('exam-timer').textContent = isStudy ? 'Chế độ học' : 'Đã nộp';
       document.getElementById('exam-timer').classList.remove('warn');
     }
   }
@@ -354,7 +434,7 @@ const App = (() => {
   }
 
   function persistDraft() {
-    if (!session || session.isReview) return;
+    if (!session || session.isReview || session.isStudy) return;
     Storage.saveDraft({
       testId: session.testId,
       mode: session.mode,
@@ -392,11 +472,78 @@ const App = (() => {
     preloadPage(session.testId, p + 1);
     preloadPage(session.testId, p + 2);
 
-    // Sync Part dropdown
+    // Sync Part dropdown & OMR active Part tab (when not viewing 'all')
     const partAtPage = [...meta.parts].reverse().find((pt) => p >= pt.page);
-    if (partAtPage) document.getElementById('select-part-jump').value = String(partAtPage.part);
+    if (partAtPage) {
+      const partStr = String(partAtPage.part);
+      document.getElementById('select-part-jump').value = partStr;
+      if (session.omrPartFilter !== 'all' && session.omrPartFilter !== partStr) {
+        session.omrPartFilter = partStr;
+        document.querySelectorAll('#omr-part-tabs .omr-tab').forEach((t) => {
+          t.classList.toggle('active', t.dataset.part === partStr);
+        });
+        renderOMR();
+      }
+    }
 
+    renderStudyAnswerStrip();
+    renderPageAnswerCircles();
     renderPageExplanations();
+  }
+
+  function renderPageAnswerCircles() {
+    const overlay = document.getElementById('page-answer-overlay');
+    if (!overlay) return;
+    if (!session || !session.isStudy) {
+      overlay.classList.add('hidden');
+      overlay.innerHTML = '';
+      return;
+    }
+    const testCoords = ANSWER_COORDS[session.testId] || {};
+    const pageQs = getPageQuestions(session.testId, session.currentPage);
+    const marks = [];
+    pageQs.forEach((q) => {
+      const c = testCoords[String(q)];
+      if (!c) return;
+      const activeCls = q === session.currentQ ? ' active' : '';
+      marks.push(
+        `<div class="ans-circle-mark${activeCls}" style="left:${c.x}%;top:${c.y}%;" data-circle-q="${q}" title="Câu ${q}: Đáp án ${c.ans}"></div>`
+      );
+    });
+    if (!marks.length) {
+      overlay.classList.add('hidden');
+      overlay.innerHTML = '';
+      return;
+    }
+    overlay.innerHTML = marks.join('');
+    overlay.classList.remove('hidden');
+  }
+
+  function renderStudyAnswerStrip() {
+    const stripEl = document.getElementById('study-answer-strip');
+    if (!stripEl) return;
+    if (!session || !session.isStudy) {
+      stripEl.classList.add('hidden');
+      stripEl.innerHTML = '';
+      return;
+    }
+    const pageQs = getPageQuestions(session.testId, session.currentPage);
+    const testCoords = ANSWER_COORDS[session.testId] || {};
+    // Only show strip for questions without direct on-page circles (e.g. Part 1 & Part 2)
+    const stripQs = pageQs.filter((q) => !testCoords[String(q)]);
+    if (!stripQs.length) {
+      stripEl.classList.add('hidden');
+      stripEl.innerHTML = '';
+      return;
+    }
+    stripEl.classList.remove('hidden');
+    const correctArr = ANSWERS[session.testId] || [];
+    const pillsHtml = stripQs.map((q) => {
+      const ca = correctArr[q - 1] || '';
+      const activeCls = q === session.currentQ ? ' active' : '';
+      return `<button type="button" class="study-ans-pill${activeCls}" data-study-q="${q}" title="Chọn câu ${q}"><span>Câu ${q}</span><span class="study-circle">${ca}</span></button>`;
+    }).join('');
+    stripEl.innerHTML = `<span class="study-strip-label">Đáp án trang ${session.currentPage}:</span>${pillsHtml}`;
   }
 
   function renderTranscriptPage() {
@@ -413,13 +560,65 @@ const App = (() => {
   function applyZoom() {
     const val = document.getElementById('select-zoom').value;
     const img = document.getElementById('page-image');
+    const stage = document.getElementById('page-stage');
     if (val === 'fit') {
       img.classList.add('fit');
+      if (stage) stage.classList.add('fit');
       img.style.width = '';
     } else {
       img.classList.remove('fit');
+      if (stage) stage.classList.remove('fit');
       img.style.width = `${Math.round(820 * parseFloat(val))}px`;
     }
+  }
+
+  function openOmrDrawer() {
+    const pane = document.getElementById('pane-right');
+    const backdrop = document.getElementById('mobile-omr-backdrop');
+    if (pane) pane.classList.add('open');
+    if (backdrop) backdrop.classList.remove('hidden');
+  }
+
+  function closeOmrDrawer() {
+    const pane = document.getElementById('pane-right');
+    const backdrop = document.getElementById('mobile-omr-backdrop');
+    if (pane) pane.classList.remove('open');
+    if (backdrop) backdrop.classList.add('hidden');
+  }
+
+  function updateMobileQuickBar() {
+    if (!session) return;
+    const q = session.currentQ;
+    const labelEl = document.getElementById('mobile-current-q-label');
+    const optsEl = document.getElementById('mobile-quick-opts');
+    const flagBtn = document.getElementById('btn-mobile-q-flag');
+    const prevBtn = document.getElementById('btn-mobile-q-prev');
+    const nextBtn = document.getElementById('btn-mobile-q-next');
+    if (!labelEl || !optsEl) return;
+
+    labelEl.textContent = `Câu ${q}`;
+    const ua = session.userAnswers[q] || '';
+    const ca = (ANSWERS[session.testId] || [])[q - 1] || '';
+
+    optsEl.querySelectorAll('[data-mobile-opt]').forEach((btn) => {
+      const opt = btn.dataset.mobileOpt;
+      btn.classList.toggle('hidden', q >= 7 && q <= 31 && opt === 'D');
+      btn.classList.remove('selected', 'correct', 'wrong');
+      if (session.isStudy) {
+        if (opt === ca) btn.classList.add('correct');
+      } else if (session.isReview) {
+        if (opt === ca) btn.classList.add('correct');
+        else if (opt === ua && ua !== ca) btn.classList.add('wrong');
+      } else if (opt === ua) {
+        btn.classList.add('selected');
+      }
+      btn.disabled = !!(session.isReview || session.isStudy);
+    });
+
+    if (flagBtn) flagBtn.classList.toggle('flagged', !!session.flags[q]);
+    const idx = session.qList.indexOf(q);
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx < 0 || idx >= session.qList.length - 1;
   }
 
   function selectQuestion(q, autoPlayAudio = false) {
@@ -447,6 +646,33 @@ const App = (() => {
         chip.scrollIntoView({ block: 'nearest' });
       }
     });
+
+    renderStudyAnswerStrip();
+    renderPageAnswerCircles();
+    updateMobileQuickBar();
+    updateToolbarQControls();
+  }
+
+  function updateToolbarQControls() {
+    if (!session) return;
+    const labelEl = document.getElementById('toolbar-q-label');
+    const prevBtn = document.getElementById('btn-prev-q');
+    const nextBtn = document.getElementById('btn-next-q');
+    const idx = session.qList.indexOf(session.currentQ);
+    if (labelEl) labelEl.innerHTML = `<strong>Câu ${session.currentQ}</strong>`;
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx < 0 || idx >= session.qList.length - 1;
+  }
+
+  function stepQuestion(delta) {
+    if (!session) return;
+    const idx = session.qList.indexOf(session.currentQ);
+    const nextIdx = idx + delta;
+    if (nextIdx < 0 || nextIdx >= session.qList.length) return;
+    const nextQ = session.qList[nextIdx];
+    session.expandedQ = nextQ;
+    renderOMR();
+    selectQuestion(nextQ, false);
   }
 
   // ================= OMR SHEET (COLLAPSED GRID + INLINE EXPAND) =================
@@ -488,14 +714,18 @@ const App = (() => {
       chip.type = 'button';
       let cls = 'omr-q-chip';
       if (session.currentQ === q) cls += ' active-q';
-      if (session.isReview) {
+      if (isFlagged) cls += ' flagged';
+      if (session.isStudy) {
+        cls += ' study-correct';
+      } else if (session.isReview) {
         cls += ua === ca ? ' is-correct' : ' is-wrong';
       } else if (ua) {
         cls += ' answered';
       }
       chip.className = cls;
       chip.dataset.q = q;
-      chip.innerHTML = `<span>${q}</span>${ua ? `<span class="omr-chip-ans">·${ua}</span>` : ''}${isFlagged ? '<span class="omr-chip-flag">⚑</span>' : ''}`;
+      const chipAns = session.isStudy ? ca : ua;
+      chip.innerHTML = `<span>${q}</span>${chipAns ? `<span class="omr-chip-ans">·${chipAns}</span>` : ''}${isFlagged ? '<span class="omr-chip-flag">⚑</span>' : ''}`;
       frag.appendChild(chip);
 
       if (idx === insertAfterIdx) {
@@ -509,7 +739,9 @@ const App = (() => {
         ['A', 'B', 'C', 'D'].forEach((opt) => {
           if (eq >= 7 && eq <= 31 && opt === 'D') return;
           let ocls = 'opt-btn';
-          if (session.isReview) {
+          if (session.isStudy) {
+            if (opt === eca) ocls += ' correct';
+          } else if (session.isReview) {
             if (opt === eca) ocls += ' correct';
             else if (opt === eua && eua !== eca) ocls += ' wrong';
           } else if (opt === eua) {
@@ -519,7 +751,9 @@ const App = (() => {
         });
 
         let statusHtml = '';
-        if (session.isReview) {
+        if (session.isStudy) {
+          statusHtml = `<div class="omr-exp-status" style="color:var(--green);font-weight:600">Đáp án đúng: ${eca}</div>`;
+        } else if (session.isReview) {
           statusHtml = eua === eca
             ? `<div class="omr-exp-status" style="color:var(--green);font-weight:600">Chính xác (${eca})</div>`
             : `<div class="omr-exp-status" style="color:var(--red);font-weight:600">Bạn chọn: ${eua || '—'} · Đáp án đúng: ${eca}</div>`;
@@ -533,7 +767,7 @@ const App = (() => {
             <div class="q-actions">
               ${eq <= 100 ? `<button type="button" class="icon-btn" data-listen="${eq}" title="Nghe câu này">♪</button>` : ''}
               <button type="button" class="icon-btn${eFlagged ? ' flagged' : ''}" data-flag="${eq}" title="Cắm cờ">⚑</button>
-              ${session.isReview ? `<button type="button" class="icon-btn${eHasNote ? ' has-note' : ''}" data-note="${eq}" title="Ghi chú">✎</button>` : ''}
+              ${(session.isReview || session.isStudy) ? `<button type="button" class="icon-btn${eHasNote ? ' has-note' : ''}" data-note="${eq}" title="Ghi chú">✎</button>` : ''}
             </div>
           </div>
           <div class="omr-exp-opts">${optsHtml}</div>
@@ -543,15 +777,46 @@ const App = (() => {
       }
     });
     listEl.appendChild(frag);
+    renderStudyAnswerStrip();
+    renderPageAnswerCircles();
+    updateMobileQuickBar();
+    updateToolbarQControls();
+  }
+
+  function updateToolbarQControls() {
+    if (!session) return;
+    const labelEl = document.getElementById('toolbar-q-label');
+    const prevBtn = document.getElementById('btn-prev-q');
+    const nextBtn = document.getElementById('btn-next-q');
+    const idx = session.qList.indexOf(session.currentQ);
+    if (labelEl) labelEl.innerHTML = `<strong>Câu ${session.currentQ}</strong>`;
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx < 0 || idx >= session.qList.length - 1;
+  }
+
+  function stepQuestion(delta) {
+    if (!session) return;
+    const idx = session.qList.indexOf(session.currentQ);
+    const nextIdx = idx + delta;
+    if (nextIdx < 0 || nextIdx >= session.qList.length) return;
+    const nextQ = session.qList[nextIdx];
+    session.expandedQ = nextQ;
+    renderOMR();
+    selectQuestion(nextQ, false);
   }
 
   function updateHeaderStats() {
     const answered = session.qList.filter((q) => !!session.userAnswers[q]).length;
-    document.getElementById('exam-progress').textContent = `${answered}/${session.qList.length}`;
+    const text = session.isStudy ? `${session.qList.length} câu` : `${answered}/${session.qList.length}`;
+    document.getElementById('exam-progress').textContent = text;
+    const mobileProg = document.getElementById('mobile-drawer-progress');
+    if (mobileProg) mobileProg.textContent = text;
+    const drawerStats = document.getElementById('omr-drawer-stats');
+    if (drawerStats) drawerStats.textContent = text;
   }
 
   function chooseAnswer(q, opt) {
-    if (session.isReview) return;
+    if (session.isReview || session.isStudy) return;
     session.userAnswers[q] = opt;
     session.expandedQ = q;
     persistDraft();
@@ -605,6 +870,8 @@ const App = (() => {
     });
 
     session.isReview = true;
+    renderPageExplanations();
+    updateMobileQuickBar();
     showResultModal({ lcCorrect, rcCorrect, totalCorrect, totalQ: session.qList.length, lcScaled, rcScaled, scaledTotal, partStats });
   }
 
@@ -814,6 +1081,49 @@ const App = (() => {
       }
     });
 
+    const studyBar = document.querySelector('.study-tabs-bar');
+    if (studyBar) {
+      studyBar.addEventListener('click', (e) => {
+        const studyBtn = e.target.closest('[data-study]');
+        if (!studyBtn) return;
+        const testId = studyBtn.dataset.study;
+        startSession({
+          testId,
+          mode: 'study',
+          modeLabel: 'Chế độ học',
+          qList: Array.from({ length: 200 }, (_, i) => i + 1),
+          durationSec: 0,
+        });
+      });
+    }
+
+    document.getElementById('study-answer-strip').addEventListener('click', (e) => {
+      const pill = e.target.closest('[data-study-q]');
+      if (!pill || !session || !session.isStudy) return;
+      const q = Number(pill.dataset.studyQ);
+      session.expandedQ = q;
+      renderOMR();
+      selectQuestion(q, q <= 100);
+    });
+
+    document.getElementById('page-answer-overlay').addEventListener('click', (e) => {
+      const mark = e.target.closest('[data-circle-q]');
+      if (!mark || !session || !session.isStudy) return;
+      const q = Number(mark.dataset.circleQ);
+      session.expandedQ = q;
+      const hasExp = !!(EXPLANATIONS[session.testId] && EXPLANATIONS[session.testId][String(q)]);
+      if (hasExp) {
+        session.pageExpOpen = true;
+      }
+      renderOMR();
+      selectQuestion(q, q <= 100);
+      if (hasExp) {
+        renderPageExplanations();
+        const item = document.getElementById(`exp-item-${q}`);
+        if (item) item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+
     // Resume / Discard draft
     document.getElementById('btn-resume-draft').addEventListener('click', () => {
       const d = Storage.getDraft();
@@ -983,6 +1293,8 @@ const App = (() => {
       session.currentPage++;
       renderPage();
     });
+    document.getElementById('btn-prev-q').addEventListener('click', () => stepQuestion(-1));
+    document.getElementById('btn-next-q').addEventListener('click', () => stepQuestion(1));
     document.getElementById('select-part-jump').addEventListener('change', (e) => {
       const pt = TESTS[session.testId].parts.find((p) => p.part === Number(e.target.value));
       if (pt) {
@@ -1061,6 +1373,49 @@ const App = (() => {
         session.expandedQ = session.expandedQ === q ? null : q;
         renderOMR();
         selectQuestion(q, false);
+      }
+    });
+
+    // Mobile Settings, OMR Drawer & Quick Answer Bar
+    document.getElementById('btn-mobile-settings').addEventListener('click', (e) => {
+      const paneLeft = document.querySelector('.pane-left');
+      if (!paneLeft) return;
+      const isOpen = paneLeft.classList.toggle('settings-open');
+      e.currentTarget.classList.toggle('active', isOpen);
+      e.currentTarget.setAttribute('aria-expanded', String(isOpen));
+    });
+    document.getElementById('btn-open-omr-drawer').addEventListener('click', openOmrDrawer);
+    document.getElementById('btn-close-omr-drawer').addEventListener('click', closeOmrDrawer);
+    document.getElementById('mobile-omr-backdrop').addEventListener('click', closeOmrDrawer);
+    document.getElementById('mobile-quick-opts').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-mobile-opt]');
+      if (!btn || !session || session.isReview) return;
+      chooseAnswer(session.currentQ, btn.dataset.mobileOpt);
+    });
+    document.getElementById('btn-mobile-q-flag').addEventListener('click', () => {
+      if (!session) return;
+      const q = session.currentQ;
+      session.flags[q] = !session.flags[q];
+      if (!session.isReview) persistDraft();
+      renderOMR();
+      updateMobileQuickBar();
+    });
+    document.getElementById('btn-mobile-q-prev').addEventListener('click', () => {
+      if (!session) return;
+      const idx = session.qList.indexOf(session.currentQ);
+      if (idx > 0) {
+        const prevQ = session.qList[idx - 1];
+        selectQuestion(prevQ, false);
+        renderOMR();
+      }
+    });
+    document.getElementById('btn-mobile-q-next').addEventListener('click', () => {
+      if (!session) return;
+      const idx = session.qList.indexOf(session.currentQ);
+      if (idx >= 0 && idx < session.qList.length - 1) {
+        const nextQ = session.qList[idx + 1];
+        selectQuestion(nextQ, false);
+        renderOMR();
       }
     });
 
@@ -1148,15 +1503,19 @@ const App = (() => {
 
   async function init() {
     try {
-      const [tRes, aRes, eRes] = await Promise.all([
+      const [tRes, aRes, eRes, cRes] = await Promise.all([
         fetch('data/tests.json'),
         fetch('data/answers.json'),
         fetch('data/explanations.json').catch(() => null),
+        fetch('data/answer_coords.json').catch(() => null),
       ]);
       TESTS = await tRes.json();
       ANSWERS = await aRes.json();
       if (eRes && eRes.ok) {
         EXPLANATIONS = await eRes.json();
+      }
+      if (cRes && cRes.ok) {
+        ANSWER_COORDS = await cRes.json();
       }
       bindEvents();
       renderDashboard();
